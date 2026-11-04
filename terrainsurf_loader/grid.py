@@ -1,6 +1,8 @@
 """Regular longitude/latitude grid of terrain heights in Surfer ASCII (DSAA) form.
 
-Corner points only set the bounding rectangle. The grid is uniform in degrees:
+Corner points set the bounding rectangle. One lower-left point plus a cell size
+builds the same rectangle: each cell is that many ground meters wide and tall at
+the latitude halfway between south and north. The grid is uniform in degrees:
 X is longitude, Y is latitude, Z is elevation in meters. ``--cells NX NY`` is the
 number of cells, so the file stores NX+1 by NY+1 nodes. The first data row is the
 south edge (Surfer's ylo). Missing heights use Surfer's blank value, 1.70141e38.
@@ -53,6 +55,37 @@ def cells(count, name):
     if type(count) is not int or not 1 <= count <= MAX_CELLS:
         raise ValueError(f"{name} must be a whole number from 1 to {MAX_CELLS}.")
     return count
+
+
+def region(points, cells_x, cells_y, cell_size=None):
+    """Corner points, or one lower-left point expanded by equal ground-meter cells.
+
+    ``cell_size`` is the north-south and east-west length of one cell, in meters,
+    at the latitude halfway up the rectangle. Longitude spacing uses that same
+    length, so a cell is square there and slightly wider toward the equator.
+    """
+    cells(cells_x, "cells x")
+    cells(cells_y, "cells y")
+    if cell_size is None:
+        if len(points) < 2:
+            raise ValueError("Pass corner points as LAT LON pairs, at least two points.")
+        return points
+    if len(points) != 1:
+        raise ValueError("With a cell size, pass the lower-left corner as one LAT LON pair.")
+    if type(cell_size) not in (int, float) or not math.isfinite(cell_size) or cell_size <= 0:
+        raise ValueError("cell size must be a positive number of meters.")
+    lat, lon = points[0]
+    if not (math.isfinite(lat) and math.isfinite(lon)):
+        raise ValueError("Coordinates must be finite numbers.")
+    south = math.radians(lat)
+    north = south + cells_y * cell_size / MERCATOR_RADIUS
+    cosine = math.cos((south + north) / 2)
+    if cosine < 1e-6:
+        raise ValueError("The grid reaches too far north or south.")
+    east = math.radians(lon) + cells_x * cell_size / (MERCATOR_RADIUS * cosine)
+    corners = [(lat, lon), (math.degrees(north), math.degrees(east))]
+    bounds(corners)
+    return corners
 
 
 def choose_zoom(west, south, east, north, cells_x, cells_y, limit=14):

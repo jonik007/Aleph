@@ -62,6 +62,9 @@ class MaskTests(unittest.TestCase):
     def test_cli_rejects_a_single_corner(self):
         self.assertEqual(main(["--cells", "2", "2", "-o", "out.grd", "48.7", "44.5"]), 2)
 
+    def test_cli_rejects_cell_size_with_two_corners(self):
+        self.assertEqual(main(["--cells", "2", "2", "--cell-size", "30", "-o", "out.grd", "48.6", "44.4", "48.7", "44.5"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
