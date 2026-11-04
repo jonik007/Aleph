@@ -1,4 +1,4 @@
-"""Surfer grid of land and water for the same rectangle and cell counts as terrainsurf.
+"""Surfer grid of land and water for the same rectangle, cell counts, and cell size as terrainsurf.
 
 Each value is one cell, written at the cell center. 1 is land and 0 is water.
 A cell is water when an OpenStreetMap water polygon meets its interior: the
