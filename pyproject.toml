@@ -12,9 +12,10 @@ dependencies = ["Pillow>=10", "numpy>=1.25", "truststore>=0.10"]
 
 [project.scripts]
 alephgeo = "alephgeo.__main__:main"
+terrainsurf = "terrainsurf_loader.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["alephgeo*"]
+include = ["alephgeo*", "terrainsurf_loader*"]
 
 [tool.setuptools.package-data]
 alephgeo = ["web/*", "web/icons/*"]
