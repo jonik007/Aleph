@@ -9,7 +9,7 @@ import numpy as np
 
 from alephgeo.layers import NODATA
 from terrainsurf_loader.__main__ import main
-from terrainsurf_loader.grid import axes, bounds, choose_zoom, region, sample_grid, tiles_for, write_grd
+from terrainsurf_loader.grid import bounds, cell_grid, choose_zoom, region, sample_grid, tiles_for, write_grd
 
 
 def ramp(tx, ty):
@@ -31,10 +31,11 @@ class GridTests(unittest.TestCase):
         south, west, north, east = bounds([(55.8, 37.7), (55.7, 37.5), (55.75, 37.6)])
         self.assertEqual((south, west, north, east), (55.7, 37.5, 55.8, 37.7))
 
-    def test_nodes_include_both_edges(self):
-        lons, lats = axes(10, 20, 12, 23, 2, 3)
-        self.assertEqual(lons.tolist(), [10, 11, 12])
-        self.assertEqual(lats.tolist(), [20, 21, 22, 23])
+    def test_values_sit_on_cell_centers_inside_the_rectangle(self):
+        lons, lats, header = cell_grid(10, 20, 12, 23, 2, 3)
+        self.assertEqual(lons.tolist(), [10.5, 11.5])
+        self.assertEqual(lats.tolist(), [20.5, 21.5, 22.5])
+        self.assertEqual(header, (10.5, 20.5, 11.5, 22.5))
 
     def test_zoom_tracks_cell_size_and_stops_at_14(self):
         # About 2 m cells hit the tile limit. A 0.03° cell is near a 3 km sample. A hemisphere stays coarse.

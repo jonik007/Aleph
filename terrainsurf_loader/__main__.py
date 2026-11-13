@@ -25,7 +25,7 @@ def main(argv=None):
     parser.add_argument("coordinates", nargs="+", type=float, metavar="LAT LON",
                         help="latitude longitude pairs: at least two corners, or one lower-left corner with --cell-size")
     parser.add_argument("--cells", nargs=2, type=int, required=True, metavar=("NX", "NY"),
-                        help="grid cells along longitude and latitude; the file stores one extra node on each side")
+                        help="grid cells along longitude and latitude; one height at each cell center, same layout as watersurf")
     parser.add_argument("--cell-size", type=float, metavar="METERS",
                         help="ground meters per cell at mid-latitude; then pass the lower-left corner instead of corners")
     parser.add_argument("-o", "--output", type=Path, required=True, help="Surfer ASCII grid to write")

@@ -4,8 +4,10 @@ Corner points set the bounding rectangle. One lower-left point plus a cell size
 builds the same rectangle: each cell is that many ground meters wide and tall at
 the latitude halfway between south and north. The grid is uniform in degrees:
 X is longitude, Y is latitude, Z is elevation in meters. ``--cells NX NY`` is the
-number of cells, so the file stores NX+1 by NY+1 nodes. The first data row is the
-south edge (Surfer's ylo). Missing heights use Surfer's blank value, 1.70141e38.
+number of cells. The file stores one elevation per cell, at the cell center, and
+the header lists those centers — the same layout as the water grid. The first
+data row is the southern row (Surfer's ylo). Missing heights use Surfer's blank
+value, 1.70141e38.
 
 Heights come from AWS Terrain Tiles
 (https://github.com/tilezen/joerd/blob/master/docs/attribution.md).
@@ -100,9 +102,19 @@ def choose_zoom(west, south, east, north, cells_x, cells_y, limit=14):
     return min(limit, max(1, zoom))
 
 
-def axes(west, south, east, north, cells_x, cells_y):
-    """Node longitudes and latitudes. Index 0 is the west or south edge."""
-    return np.linspace(west, east, cells_x + 1), np.linspace(south, north, cells_y + 1)
+def cell_grid(west, south, east, north, cells_x, cells_y):
+    """Cell-center coordinates and the Surfer header shared with the water grid.
+
+    Index 0 is the southwestern cell. The header is the centers of the corner cells,
+    half a cell inside the rectangle, so a terrain file and a water file of the same
+    rectangle and cell counts overlie each other.
+    """
+    dx = (east - west) / cells_x
+    dy = (north - south) / cells_y
+    longitudes = west + (np.arange(cells_x) + 0.5) * dx
+    latitudes = south + (np.arange(cells_y) + 0.5) * dy
+    header = (west + dx / 2, south + dy / 2, east - dx / 2, north - dy / 2)
+    return longitudes, latitudes, header
 
 
 def project(lon, lat, world):
@@ -195,7 +207,7 @@ def sample_grid(lons, lats, zoom, array):
 
 
 def write_grd(path, west, south, east, north, values):
-    """Write DSAA. Row 0 of ``values`` is the southern edge, column 0 the western edge."""
+    """Write DSAA. Row 0 of ``values`` is the southern row, column 0 the western column."""
     finite = values[np.isfinite(values)]
     if finite.size == 0:
         raise ValueError("No elevation values fell on this grid.")
@@ -300,17 +312,18 @@ def surfer_grid(points, cells_x, cells_y, output, *, zoom=None, cache_dir=None, 
     if type(workers) is not int or not 1 <= workers <= 64:
         raise ValueError("workers must be a whole number from 1 to 64.")
     announce = announce or (lambda message: print(message, file=sys.stderr))
-    lons, lats = axes(west, south, east, north, cells_x, cells_y)
+    lons, lats, header = cell_grid(west, south, east, north, cells_x, cells_y)
     tiles = tiles_for(west, south, east, north, zoom)
     cache = TileCache(zoom, cache_dir or default_cache(), client or Client(), workers)
     cache.ensure(tiles, announce)
     values = sample_grid(lons, lats, zoom, cache.array)
-    zmin, zmax = write_grd(output, west, south, east, north, values)
+    zmin, zmax = write_grd(output, *header, values)
     blanks = int(np.isnan(values).sum())
     ny, nx = values.shape
-    announce(f"Wrote {output} ({nx} × {ny} nodes, {zmin:.1f}…{zmax:.1f} m)")
+    announce(f"Wrote {output} ({nx} × {ny} cells, {zmin:.1f}…{zmax:.1f} m)")
     if blanks:
-        announce(f"{blanks} nodes have no elevation and are blank in the grid.")
+        announce(f"{blanks} cells have no elevation and are blank in the grid.")
+    announce("Each value is the elevation at the cell center.")
     announce("Heights: AWS Terrain Tiles. Credit the sources in the Tilezen joerd attribution.")
-    return dict(zoom=zoom, west=west, south=south, east=east, north=north, nodes=(nx, ny), zmin=zmin, zmax=zmax,
+    return dict(zoom=zoom, west=west, south=south, east=east, north=north, cells=(nx, ny), zmin=zmin, zmax=zmax,
                 blanks=blanks, tiles=len(tiles), output=str(output))
