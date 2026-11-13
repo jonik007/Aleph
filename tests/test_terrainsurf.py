@@ -9,7 +9,7 @@ import numpy as np
 
 from alephgeo.layers import NODATA
 from terrainsurf_loader.__main__ import main
-from terrainsurf_loader.grid import axes, bounds, choose_zoom, sample_grid, tiles_for, write_grd
+from terrainsurf_loader.grid import bounds, cell_grid, choose_zoom, region, sample_grid, tiles_for, write_grd
 
 
 def ramp(tx, ty):
@@ -31,10 +31,11 @@ class GridTests(unittest.TestCase):
         south, west, north, east = bounds([(55.8, 37.7), (55.7, 37.5), (55.75, 37.6)])
         self.assertEqual((south, west, north, east), (55.7, 37.5, 55.8, 37.7))
 
-    def test_nodes_include_both_edges(self):
-        lons, lats = axes(10, 20, 12, 23, 2, 3)
-        self.assertEqual(lons.tolist(), [10, 11, 12])
-        self.assertEqual(lats.tolist(), [20, 21, 22, 23])
+    def test_values_sit_on_cell_centers_inside_the_rectangle(self):
+        lons, lats, header = cell_grid(10, 20, 12, 23, 2, 3)
+        self.assertEqual(lons.tolist(), [10.5, 11.5])
+        self.assertEqual(lats.tolist(), [20.5, 21.5, 22.5])
+        self.assertEqual(header, (10.5, 20.5, 11.5, 22.5))
 
     def test_zoom_tracks_cell_size_and_stops_at_14(self):
         # About 2 m cells hit the tile limit. A 0.03° cell is near a 3 km sample. A hemisphere stays coarse.
@@ -90,8 +91,32 @@ class GridTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "terrain tiles"):
             tiles_for(-180, -80, 180, 80, 14)
 
+    def test_lower_left_and_cell_size_are_square_at_mid_latitude(self):
+        # The same southwest corner and 30 m cells used for the 6 km Volgograd square.
+        points = region([(48.6812415415, 44.4744959442)], 200, 200, 30)
+        south, west, north, east = bounds(points)
+        self.assertAlmostEqual(south, 48.6812415415)
+        self.assertAlmostEqual(west, 44.4744959442)
+        self.assertAlmostEqual(north, 48.7351404585, places=7)
+        self.assertAlmostEqual(east, 44.5561740558, places=7)
+        lat = math.radians((south + north) / 2)
+        radius = 6_378_137
+        meters_x = math.radians(east - west) / 200 * radius * math.cos(lat)
+        meters_y = math.radians(north - south) / 200 * radius
+        self.assertAlmostEqual(meters_x, 30, places=6)
+        self.assertAlmostEqual(meters_y, 30, places=6)
+
+    def test_cell_size_rejects_corners_and_a_nonpositive_length(self):
+        with self.assertRaisesRegex(ValueError, "lower-left"):
+            region([(55.7, 37.5), (55.8, 37.7)], 2, 2, 30)
+        with self.assertRaisesRegex(ValueError, "positive"):
+            region([(55.7, 37.5)], 2, 2, 0)
+
     def test_cli_rejects_a_single_corner(self):
         self.assertEqual(main(["--cells", "2", "2", "-o", "out.grd", "55.7", "37.5"]), 2)
+
+    def test_cli_rejects_cell_size_with_two_corners(self):
+        self.assertEqual(main(["--cells", "2", "2", "--cell-size", "30", "-o", "out.grd", "55.7", "37.5", "55.8", "37.7"]), 2)
 
 
 if __name__ == "__main__":

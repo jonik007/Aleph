@@ -1,4 +1,4 @@
-"""Surfer grid of land and water for the same rectangle and cell counts as terrainsurf.
+"""Surfer grid of land and water on the same cell centers as terrainsurf.
 
 Each value is one cell, written at the cell center. 1 is land and 0 is water.
 A cell is water when an OpenStreetMap water polygon meets its interior: the
@@ -21,7 +21,7 @@ import numpy as np
 from alephgeo.common import DEFAULT_CACHE, Client
 from alephgeo.geo import within
 from alephgeo.layers import osm
-from terrainsurf_loader.grid import bounds, cells, write_grd
+from terrainsurf_loader.grid import bounds, cell_grid, cells, write_grd
 
 # Shrink a cell when testing an edge, so a shoreline that only lies on the grid line
 # does not paint the neighboring dry cell.
@@ -80,10 +80,9 @@ def _overlaps(ring, west, south, east, north):
 
 def cell_mask(west, south, east, north, cells_x, cells_y, polygons):
     """0 where a water polygon meets the cell, 1 on land. Row 0 is the south row."""
+    longitudes, latitudes, _ = cell_grid(west, south, east, north, cells_x, cells_y)
     dx = (east - west) / cells_x
     dy = (north - south) / cells_y
-    latitudes = south + (np.arange(cells_y) + 0.5) * dy
-    longitudes = west + (np.arange(cells_x) + 0.5) * dx
     latitude, longitude = np.meshgrid(latitudes, longitudes, indexing="ij")
     water = np.zeros((cells_y, cells_x), bool)
     for rings in polygons:
@@ -153,10 +152,8 @@ def water_grid(points, cells_x, cells_y, output, *, cache_dir=None, client=None,
     extract = _extract(cache, south, west, north, east, source, announce)
     polygons = water_polygons(extract)
     values = cell_mask(west, south, east, north, cells_x, cells_y, polygons)
-    dx = (east - west) / cells_x
-    dy = (north - south) / cells_y
-    # One node per cell, sitting on the cell center, so the header is inset by half a cell.
-    write_grd(output, west + dx / 2, south + dy / 2, east - dx / 2, north - dy / 2, values)
+    _, _, header = cell_grid(west, south, east, north, cells_x, cells_y)
+    write_grd(output, *header, values)
     wet = int(np.count_nonzero(values == 0))
     dry = values.size - wet
     announce(f"Wrote {output} ({cells_x} × {cells_y} cells, {wet} water, {dry} land)")
