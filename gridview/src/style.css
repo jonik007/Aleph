@@ -38,6 +38,21 @@ h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
 
 .lead { margin: 8px 0 18px; }
 
+.presets { display: grid; gap: 8px; margin-bottom: 4px; }
+
+.preset {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #171e1b;
+  cursor: pointer;
+}
+
+.preset.selected, .preset:hover { border-color: #6d8076; }
+
 .slot {
   display: flex;
   flex-wrap: wrap;

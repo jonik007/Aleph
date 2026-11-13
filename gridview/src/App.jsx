@@ -16,8 +16,24 @@ function formatMeters(value) {
   return `${value.toFixed(abs >= 10 ? 0 : 1)} м`;
 }
 
+const PRESETS = [
+  {
+    id: "volgograd",
+    name: "Волгоград",
+    detail: "6 × 6 км, 200 × 200, ячейка 30 м",
+    terrain: { url: "/samples/volgograd.grd", name: "volgograd.grd" },
+    water: { url: "/samples/volgograd-water.grd", name: "volgograd-water.grd" },
+  },
+];
+
 async function readGrid(file) {
   return { name: file.name, grid: parseGrd(await file.text()) };
+}
+
+async function readUrl(url, name) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Не удалось открыть ${name}.`);
+  return { name, grid: parseGrd(await response.text()) };
 }
 
 function Slot({ title, hint, entry, error, onFile, onClear }) {
@@ -138,6 +154,8 @@ export function App() {
   const [waterError, setWaterError] = useState("");
   const [exaggeration, setExaggeration] = useState(6);
   const [wireframe, setWireframe] = useState(false);
+  const [presetId, setPresetId] = useState("");
+  const [presetError, setPresetError] = useState("");
 
   useEffect(() => {
     const block = (event) => event.preventDefault();
@@ -150,12 +168,37 @@ export function App() {
   }, []);
 
   async function open(file, setEntry, setError) {
+    setPresetId("");
     try {
       setEntry(await readGrid(file));
       setError("");
     } catch (error) {
       setEntry(null);
       setError(error.message);
+    }
+  }
+
+  async function openPreset(preset) {
+    setPresetId(preset.id);
+    setPresetError("");
+    setTerrainError("");
+    setWaterError("");
+    const [reliefResult, waterResult] = await Promise.allSettled([
+      readUrl(preset.terrain.url, preset.terrain.name),
+      readUrl(preset.water.url, preset.water.name),
+    ]);
+    if (reliefResult.status === "fulfilled") setTerrain(reliefResult.value);
+    else {
+      setTerrain(null);
+      setTerrainError(reliefResult.reason.message);
+    }
+    if (waterResult.status === "fulfilled") setWater(waterResult.value);
+    else {
+      setWater(null);
+      setWaterError(waterResult.reason.message);
+    }
+    if (reliefResult.status === "rejected" || waterResult.status === "rejected") {
+      setPresetError("Не удалось загрузить готовые сетки Волгограда.");
     }
   }
 
@@ -174,13 +217,28 @@ export function App() {
       <aside>
         <h1>Сетки Surfer</h1>
         <p className="lead">Рельеф и вода из файлов DSAA. Одинаковое число ячеек ложится на одну поверхность.</p>
+        <div className="presets">
+          <span className="slot-title">Готовые</span>
+          {PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              className={presetId === preset.id ? "preset selected" : "preset"}
+              onClick={() => openPreset(preset)}
+            >
+              <span>{preset.name}</span>
+              <span className="slot-name">{preset.detail}</span>
+            </button>
+          ))}
+          {presetError ? <span className="error">{presetError}</span> : null}
+        </div>
         <Slot
           title="Рельеф"
           hint="Выберите или перетащите .grd"
           entry={terrain}
           error={terrainError}
           onFile={(file) => open(file, setTerrain, setTerrainError)}
-          onClear={() => { setTerrain(null); setTerrainError(""); }}
+          onClear={() => { setTerrain(null); setTerrainError(""); setPresetId(""); }}
         />
         {terrain ? <Summary entry={terrain} /> : null}
         <Slot
@@ -189,7 +247,7 @@ export function App() {
           entry={water}
           error={waterError}
           onFile={(file) => open(file, setWater, setWaterError)}
-          onClear={() => { setWater(null); setWaterError(""); }}
+          onClear={() => { setWater(null); setWaterError(""); setPresetId(""); }}
         />
         {water ? <Summary entry={water} /> : null}
         {mismatch ? <p className="error">{mismatch}</p> : null}
