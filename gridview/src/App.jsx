@@ -20,7 +20,7 @@ const PRESETS = [
   {
     id: "volgograd",
     name: "Волгоград",
-    detail: "6 × 6 км, 200 × 200, ячейка 30 м",
+    detail: "12 × 12 км, 400 × 400, ячейка 30 м",
     terrain: { url: "/samples/volgograd.grd", name: "volgograd.grd" },
     water: { url: "/samples/volgograd-water.grd", name: "volgograd-water.grd" },
   },
