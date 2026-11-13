@@ -133,25 +133,25 @@ function PoleLetter({ letter, position, size }) {
 function NorthArrow({ width, depth, span }) {
   const y = Math.max(span * 0.12, 24);
   const x = -width / 2 - Math.max(span * 0.02, 12);
-  const south = -depth * 0.05;
-  const north = depth * 0.42;
-  const head = Math.max((north - south) * 0.22, 30);
+  const south = depth * 0.05;
+  const north = -depth * 0.42;
+  const head = Math.max((south - north) * 0.22, 30);
   const shaftRadius = Math.max(span * 0.006, 3.5);
-  const shaft = Math.max(north - south - head, head);
+  const shaft = Math.max(south - north - head, head);
   const letter = Math.max(span * 0.055, 40);
   const beside = span * 0.07;
   return (
     <group position={[x, y, 0]}>
-      <mesh position={[0, 0, south + shaft / 2]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0, south - shaft / 2]} rotation={[-Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[shaftRadius, shaftRadius, shaft, 10]} />
         <meshBasicMaterial color="#f4f1e8" />
       </mesh>
-      <mesh position={[0, 0, north - head / 2]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0, north + head / 2]} rotation={[-Math.PI / 2, 0, 0]}>
         <coneGeometry args={[shaftRadius * 3.2, head, 14]} />
         <meshBasicMaterial color="#f4f1e8" />
       </mesh>
-      <PoleLetter letter="С" position={[beside, 0, north - head * 0.35]} size={letter} />
-      <PoleLetter letter="Ю" position={[beside, 0, south + head * 0.2]} size={letter} />
+      <PoleLetter letter="С" position={[beside, 0, north + head * 0.35]} size={letter} />
+      <PoleLetter letter="Ю" position={[beside, 0, south - head * 0.2]} size={letter} />
     </group>
   );
 }
@@ -160,7 +160,7 @@ function CameraFit({ span }) {
   const camera = useThree((state) => state.camera);
   const controls = useThree((state) => state.controls);
   useEffect(() => {
-    camera.position.set(span * 0.28, Math.max(span * 0.55, 40), -span * 1.45);
+    camera.position.set(span * 0.28, Math.max(span * 0.55, 40), span * 1.45);
     camera.near = Math.max(span / 8000, 0.05);
     camera.far = span * 80;
     camera.updateProjectionMatrix();

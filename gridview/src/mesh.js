@@ -39,7 +39,8 @@ function elevationColor(z, zmin, zmax) {
   return stops.at(-1)[1];
 }
 
-// One mesh in local meters: x east, y up from the lowest sample, z north.
+// One mesh in local meters: x east, y up from the lowest sample, z south.
+// North is -Z so that a camera looking north keeps east on the right of the screen.
 // A water grid of the same size paints 0-cells blue. Without relief, water is a flat map.
 export function buildSurface(terrain, water) {
   const source = terrain ?? water;
@@ -71,7 +72,7 @@ export function buildSurface(terrain, water) {
         : !terrain && height === 0;
       positions[slot * 3] = easting[i] - xMid;
       positions[slot * 3 + 1] = terrain && Number.isFinite(height) ? height - terrain.zmin : 0;
-      positions[slot * 3 + 2] = northing[j] - zMid;
+      positions[slot * 3 + 2] = zMid - northing[j];
       const color = wet ? WATER : terrain && Number.isFinite(height) ? elevationColor(height, terrain.zmin, terrain.zmax) : SAND;
       colors[slot * 3] = color[0];
       colors[slot * 3 + 1] = color[1];

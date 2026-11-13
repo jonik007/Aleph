@@ -10,7 +10,7 @@ test("southern row stays south, and water cells of a matching grid turn blue", (
   const view = buildSurface(terrain, water);
   const position = view.geometry.getAttribute("position");
   const color = view.geometry.getAttribute("color");
-  assert.ok(position.getZ(0) < position.getZ(2));
+  assert.ok(position.getZ(0) > position.getZ(2));
   assert.ok(position.getX(0) < position.getX(1));
   assert.equal(position.getY(0), 0);
   assert.equal(position.getY(1), 2);
