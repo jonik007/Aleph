@@ -1,4 +1,4 @@
-import { OrbitControls } from "@react-three/drei";
+import { Billboard, OrbitControls } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
@@ -98,15 +98,60 @@ function Relief({ geometry, exaggeration, wireframe }) {
   );
 }
 
-function NorthMark({ depth, span }) {
-  const height = Math.max(span * 0.22, 40);
-  const radius = Math.max(span * 0.007, 3);
+function letterTexture(letter) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const pen = canvas.getContext("2d");
+  pen.clearRect(0, 0, 256, 256);
+  pen.fillStyle = "rgba(18, 23, 20, 0.9)";
+  pen.beginPath();
+  pen.roundRect(16, 56, 224, 144, 28);
+  pen.fill();
+  pen.fillStyle = "#f7f4ee";
+  pen.font = "700 128px sans-serif";
+  pen.textAlign = "center";
+  pen.textBaseline = "middle";
+  pen.fillText(letter, 128, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function PoleLetter({ letter, position, size }) {
+  const map = useMemo(() => letterTexture(letter), [letter]);
   return (
-    <group position={[0, 0, depth / 2]}>
-      <mesh position={[0, height / 2, 0]}>
-        <cylinderGeometry args={[radius, radius, height, 10]} />
+    <Billboard position={position}>
+      <mesh>
+        <planeGeometry args={[size * 1.2, size]} />
+        <meshBasicMaterial map={map} transparent depthWrite={false} />
+      </mesh>
+    </Billboard>
+  );
+}
+
+function NorthArrow({ width, depth, span }) {
+  const y = Math.max(span * 0.12, 24);
+  const x = -width / 2 - Math.max(span * 0.02, 12);
+  const south = -depth * 0.05;
+  const north = depth * 0.42;
+  const head = Math.max((north - south) * 0.22, 30);
+  const shaftRadius = Math.max(span * 0.006, 3.5);
+  const shaft = Math.max(north - south - head, head);
+  const letter = Math.max(span * 0.055, 40);
+  const beside = span * 0.07;
+  return (
+    <group position={[x, y, 0]}>
+      <mesh position={[0, 0, south + shaft / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[shaftRadius, shaftRadius, shaft, 10]} />
         <meshBasicMaterial color="#f4f1e8" />
       </mesh>
+      <mesh position={[0, 0, north - head / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[shaftRadius * 3.2, head, 14]} />
+        <meshBasicMaterial color="#f4f1e8" />
+      </mesh>
+      <PoleLetter letter="С" position={[beside, 0, north - head * 0.35]} size={letter} />
+      <PoleLetter letter="Ю" position={[beside, 0, south + head * 0.2]} size={letter} />
     </group>
   );
 }
@@ -115,7 +160,7 @@ function CameraFit({ span }) {
   const camera = useThree((state) => state.camera);
   const controls = useThree((state) => state.controls);
   useEffect(() => {
-    camera.position.set(span * 0.46, Math.max(span * 0.42, 30), -span);
+    camera.position.set(span * 0.28, Math.max(span * 0.55, 40), -span * 1.45);
     camera.near = Math.max(span / 8000, 0.05);
     camera.far = span * 80;
     camera.updateProjectionMatrix();
@@ -140,7 +185,7 @@ function Stage({ view, exaggeration, wireframe }) {
         <meshStandardMaterial color="#141a17" roughness={1} />
       </mesh>
       {view ? <Relief geometry={view.geometry} exaggeration={exaggeration} wireframe={wireframe} /> : null}
-      {view?.geometry.index ? <NorthMark depth={view.depth} span={span} /> : null}
+      {view?.geometry.index ? <NorthArrow width={view.width} depth={view.depth} span={span} /> : null}
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
       <CameraFit span={span} />
     </>
@@ -270,7 +315,7 @@ export function App() {
         </label>
         <p className="note">
           {span
-            ? `Участок ${formatMeters(view.width)} × ${formatMeters(view.depth)}. Высота отложена от нижней точки. Светлый столбик стоит на северном краю.`
+            ? `Участок ${formatMeters(view.width)} × ${formatMeters(view.depth)}. Высота отложена от нижней точки. Стрелка указывает с юга на север.`
             : "Первая строка файла — южный край. Пустые узлы Surfer не рисуются."}
         </p>
         <div className="legend">
