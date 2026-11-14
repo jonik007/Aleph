@@ -6,7 +6,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test parseGrd.test.js mesh.test.js"
+    "test": "node --test parseGrd.test.js parseGeoJson.test.js mesh.test.js src/vectors.test.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",

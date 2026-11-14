@@ -3,8 +3,10 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 
+import { parseGeoJson } from "../parseGeoJson.js";
 import { parseGrd, sameShape } from "../parseGrd.js";
 import { buildSurface } from "./mesh.js";
+import { buildVectors } from "./vectors.js";
 
 function formatDegrees(value) {
   return value.toFixed(5);
@@ -20,9 +22,10 @@ const PRESETS = [
   {
     id: "volgograd",
     name: "Волгоград",
-    detail: "12 × 12 км, 400 × 400, ячейка 30 м",
+    detail: "12 × 12 км, 400 × 400, ячейка 30 м, крупные дороги",
     terrain: { url: "/samples/volgograd.grd", name: "volgograd.grd" },
     water: { url: "/samples/volgograd-water.grd", name: "volgograd-water.grd" },
+    roads: { url: "/samples/volgograd-roads.geojson", name: "volgograd-roads.geojson" },
   },
 ];
 
@@ -34,6 +37,20 @@ async function readUrl(url, name) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Не удалось открыть ${name}.`);
   return { name, grid: parseGrd(await response.text()) };
+}
+
+async function readVectorText(text, name) {
+  return { name, ...parseGeoJson(text) };
+}
+
+async function readVectorFile(file) {
+  return readVectorText(await file.text(), file.name);
+}
+
+async function readVectorUrl(url, name) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Не удалось открыть ${name}.`);
+  return readVectorText(await response.text(), name);
 }
 
 function Slot({ title, hint, entry, error, onFile, onClear }) {
@@ -83,10 +100,10 @@ function Summary({ entry }) {
   );
 }
 
-function Relief({ geometry, exaggeration, wireframe }) {
+function Relief({ geometry, wireframe }) {
   if (!geometry.index) return null;
   return (
-    <mesh geometry={geometry} scale={[1, exaggeration, 1]}>
+    <mesh geometry={geometry}>
       <meshStandardMaterial
         vertexColors
         roughness={0.92}
@@ -173,7 +190,16 @@ function CameraFit({ span }) {
   return null;
 }
 
-function Stage({ view, exaggeration, wireframe }) {
+function VectorLayer({ geometry, color }) {
+  if (!geometry) return null;
+  return (
+    <mesh geometry={geometry}>
+      <meshBasicMaterial color={color} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+    </mesh>
+  );
+}
+
+function Stage({ view, vectors, exaggeration, wireframe }) {
   const span = view ? Math.max(view.width, view.depth) : 1000;
   return (
     <>
@@ -184,7 +210,11 @@ function Stage({ view, exaggeration, wireframe }) {
         <planeGeometry args={[span * 1.6, span * 1.6]} />
         <meshStandardMaterial color="#141a17" roughness={1} />
       </mesh>
-      {view ? <Relief geometry={view.geometry} exaggeration={exaggeration} wireframe={wireframe} /> : null}
+      <group scale={[1, exaggeration, 1]}>
+        {view ? <Relief geometry={view.geometry} wireframe={wireframe} /> : null}
+        <VectorLayer geometry={vectors?.road} color="#f3ead2" />
+        <VectorLayer geometry={vectors?.rail} color="#e07a4c" />
+      </group>
       {view?.geometry.index ? <NorthArrow width={view.width} depth={view.depth} span={span} /> : null}
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
       <CameraFit span={span} />
@@ -201,6 +231,8 @@ export function App() {
   const [wireframe, setWireframe] = useState(false);
   const [presetId, setPresetId] = useState("");
   const [presetError, setPresetError] = useState("");
+  const [vector, setVector] = useState(null);
+  const [vectorError, setVectorError] = useState("");
 
   useEffect(() => {
     const block = (event) => event.preventDefault();
@@ -228,10 +260,12 @@ export function App() {
     setPresetError("");
     setTerrainError("");
     setWaterError("");
-    const [reliefResult, waterResult] = await Promise.allSettled([
+    const jobs = [
       readUrl(preset.terrain.url, preset.terrain.name),
       readUrl(preset.water.url, preset.water.name),
-    ]);
+    ];
+    if (preset.roads) jobs.push(readVectorUrl(preset.roads.url, preset.roads.name));
+    const [reliefResult, waterResult, roadResult] = await Promise.allSettled(jobs);
     if (reliefResult.status === "fulfilled") setTerrain(reliefResult.value);
     else {
       setTerrain(null);
@@ -242,8 +276,25 @@ export function App() {
       setWater(null);
       setWaterError(waterResult.reason.message);
     }
-    if (reliefResult.status === "rejected" || waterResult.status === "rejected") {
-      setPresetError("Не удалось загрузить готовые сетки Волгограда.");
+    if (roadResult?.status === "fulfilled") {
+      setVector(roadResult.value);
+      setVectorError("");
+    } else if (roadResult?.status === "rejected") {
+      setVector(null);
+      setVectorError(roadResult.reason.message);
+    }
+    if (reliefResult.status === "rejected" || waterResult.status === "rejected" || roadResult?.status === "rejected") {
+      setPresetError("Не удалось загрузить готовые данные Волгограда.");
+    }
+  }
+
+  async function openVector(file) {
+    try {
+      setVector(await readVectorFile(file));
+      setVectorError("");
+    } catch (error) {
+      setVector(null);
+      setVectorError(error.message);
     }
   }
 
@@ -254,14 +305,21 @@ export function App() {
   const relief = terrain?.grid ?? null;
   const mask = aligned ? water.grid : water && !terrain ? water.grid : null;
   const view = useMemo(() => (relief || mask ? buildSurface(relief, mask) : null), [relief, mask]);
+  const vectors = useMemo(() => (relief && vector ? buildVectors(relief, vector.lines) : null), [relief, vector]);
   useEffect(() => () => view?.geometry.dispose(), [view]);
+  useEffect(() => () => {
+    vectors?.road?.dispose();
+    vectors?.rail?.dispose();
+  }, [vectors]);
+  const roadLines = vector?.lines.filter((line) => line.kind === "road").length ?? 0;
+  const railLines = vector?.lines.filter((line) => line.kind === "rail").length ?? 0;
   const span = view ? Math.max(view.width, view.depth) : 0;
 
   return (
     <div className="app">
       <aside>
         <h1>Сетки Surfer</h1>
-        <p className="lead">Рельеф и вода из файлов DSAA. Одинаковое число ячеек ложится на одну поверхность.</p>
+        <p className="lead">Рельеф и вода из файлов DSAA. Линии из GeoJSON ложатся на рельеф.</p>
         <div className="presets">
           <span className="slot-title">Готовые</span>
           {PRESETS.map((preset) => (
@@ -297,6 +355,33 @@ export function App() {
         {water ? <Summary entry={water} /> : null}
         {mismatch ? <p className="error">{mismatch}</p> : null}
         {aligned ? <p className="note">Синие ячейки — вода. Остальное окрашено по высоте.</p> : null}
+        <div className="slot">
+          <label className="load">
+            Загрузить векторный json
+            <input
+              type="file"
+              accept=".json,.geojson,application/geo+json,application/json"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) openVector(file);
+              }}
+            />
+          </label>
+          <span className="slot-name">
+            {vector
+              ? `${vector.name}${roadLines ? `, авто ${roadLines}` : ""}${railLines ? `, жд ${railLines}` : ""}`
+              : "Крупные автодороги или железные дороги"}
+          </span>
+          {vector ? (
+            <button type="button" className="clear" onClick={() => { setVector(null); setVectorError(""); }}>
+              Убрать
+            </button>
+          ) : null}
+          {vectorError ? <span className="error">{vectorError}</span> : null}
+          {vector && !terrain ? <span className="error">Сначала откройте рельеф: у линий нет своей высоты.</span> : null}
+          {vector && terrain && !vectors ? <span className="error">Линии не попадают на этот рельеф.</span> : null}
+        </div>
         {view?.thinned ? <p className="note">На экране сетка прорежена до {view.shown[0]} × {view.shown[1]}.</p> : null}
         {view && !view.geometry.index ? <p className="error">В сетке меньше двух рядов или столбцов, поверхность не из чего собрать.</p> : null}
         <label className="slider">
@@ -321,12 +406,14 @@ export function App() {
         <div className="legend">
           <span><i className="swatch water" /> вода</span>
           <span><i className="swatch land" /> суша по высоте</span>
+          {roadLines ? <span><i className="swatch road" /> авто</span> : null}
+          {railLines ? <span><i className="swatch rail" /> жд</span> : null}
         </div>
       </aside>
       <main>
         {!view ? <p className="empty">Откройте рельеф или маску воды</p> : null}
         <Canvas camera={{ fov: 42, position: [400, 500, -900], near: 0.1, far: 1_000_000 }} dpr={[1, 1.75]}>
-          <Stage view={view} exaggeration={exaggeration} wireframe={wireframe} />
+          <Stage view={view} vectors={vectors} exaggeration={exaggeration} wireframe={wireframe} />
         </Canvas>
       </main>
     </div>

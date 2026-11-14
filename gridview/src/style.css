@@ -113,6 +113,25 @@ h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
   background: linear-gradient(90deg, #457544, #c4b15a 45%, #8d7358 75%, #efeee9);
 }
 
+.swatch.road { background: #f3ead2; }
+
+.swatch.rail { background: #e07a4c; }
+
+.load {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #24302b;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.load input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.load:hover { border-color: #6d8076; }
+
 main { position: relative; min-width: 0; min-height: 0; }
 
 main canvas { display: block; }
